@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <title>Câmera Escala Ringelmann</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -12,13 +12,16 @@
       font-family: Arial, sans-serif;
       display: flex;
       flex-direction: column;
-      height: 100vh;
+      /* Ajuste para não cortar no celular */
+      height: 100vh; 
+      height: 100dvh; 
       overflow: hidden;
     }
     #container {
       position: relative;
-      flex: 1;
+      flex: 1; /* Ocupa o máximo de espaço possível */
       overflow: hidden;
+      background: #111;
     }
     video {
       position: absolute;
@@ -33,43 +36,63 @@
       left: 50%;
       transform: translate(-50%, -50%);
       pointer-events: none;
+      z-index: 10;
     }
     #infoPanel {
-      padding: 8px 12px;
-      background: rgba(0,0,0,0.88);
-      font-size: 14px;
-      line-height: 1.6;
-      flex-shrink: 0;
+      padding: 10px 12px;
+      background: rgba(0,0,0,0.9);
+      border-top: 1px solid #333;
+      flex-shrink: 0; /* Impede que o painel seja esmagado */
+      z-index: 20;
+    }
+    .grid-info {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      font-size: 12px;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .btns {
+      display: flex;
+      gap: 8px;
     }
     button {
-      margin-top: 4px;
-      padding: 8px 12px; /* Aumentado levemente para toque no celular */
-      font-size: 14px;
+      flex: 1;
+      padding: 12px 5px;
+      font-size: 13px;
       border: none;
-      border-radius: 4px;
+      border-radius: 6px;
       cursor: pointer;
-      background: #1e88e5;
       color: #fff;
+      font-weight: bold;
+      text-transform: uppercase;
     }
-    #btnCapture { background: #2e7d32; margin-left: 5px; } /* Botão de captura verde */
-    #status { font-size: 12px; color: #aaa; }
-    canvas { display: none; } /* Canvas invisível para a foto */
+    #btnGPS { background: #1e88e5; }
+    #btnCapture { background: #2e7d32; }
+    #status { font-size: 11px; color: #aaa; margin-top: 6px; text-align: center; }
+    canvas { display: none; }
   </style>
 </head>
 <body>
 
 <div id="container">
-  <!-- Adicionado playsinline para funcionar no Safari/iPhone -->
   <video id="video" autoplay playsinline muted></video>
   <div id="svgWrap"></div>
 </div>
 
 <div id="infoPanel">
-  <div><strong>Data/Hora:</strong> <span id="datetime">--/--/---- --:--:--</span></div>
-  <div><strong>Lat:</strong> <span id="lat">--</span>&nbsp; <strong>Lon:</strong> <span id="lon">--</span></div>
+  <div class="grid-info">
+    <div><strong>Data:</strong> <span id="datetime">--/--/--</span></div>
+    <div style="text-align: right;"><strong>Lat:</strong> <span id="lat">--</span></div>
+    <div><strong>Ringelmann v1.0</strong></div>
+    <div style="text-align: right;"><strong>Lon:</strong> <span id="lon">--</span></div>
+  </div>
+  
+  <div class="btns">
+    <button id="btnGPS">GPS</button>
+    <button id="btnCapture">Capturar Foto</button>
+  </div>
   <div id="status">Iniciando...</div>
-  <button id="btnGPS">Atualizar localização</button>
-  <button id="btnCapture">Capturar Foto</button>
 </div>
 
 <canvas id="canvasCapture"></canvas>
@@ -79,8 +102,7 @@
     const now = new Date();
     const p = n => String(n).padStart(2,'0');
     document.getElementById('datetime').textContent =
-      `${p(now.getDate())}/${p(now.getMonth()+1)}/${now.getFullYear()} ` +
-      `${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;
+      `${p(now.getDate())}/${p(now.getMonth()+1)} ${p(now.getHours())}:${p(now.getMinutes())}`;
   }
   setInterval(updateDateTime, 1000);
   updateDateTime();
@@ -93,23 +115,22 @@
       });
       document.getElementById('video').srcObject = stream;
       status.textContent = 'Câmera ativa.';
+      setTimeout(buildScale, 500);
     } catch(e) {
-      status.textContent = 'Erro câmera (necessário HTTPS): ' + e.message;
+      status.textContent = 'Erro câmera: ' + e.message;
     }
   }
 
   function getLocation() {
     const status = document.getElementById('status');
-    if (!navigator.geolocation) { status.textContent = 'GPS não suportado.'; return; }
-    status.textContent = 'Obtendo localização...';
     navigator.geolocation.getCurrentPosition(
       pos => {
-        document.getElementById('lat').textContent = pos.coords.latitude.toFixed(6);
-        document.getElementById('lon').textContent = pos.coords.longitude.toFixed(6);
-        status.textContent = 'Localização atualizada.';
+        document.getElementById('lat').textContent = pos.coords.latitude.toFixed(4);
+        document.getElementById('lon').textContent = pos.coords.longitude.toFixed(4);
+        status.textContent = 'Localização OK.';
       },
-      err => { status.textContent = 'Erro GPS: ' + err.message; },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      err => { status.textContent = 'Erro GPS: Ative a localização.'; },
+      { enableHighAccuracy: true }
     );
   }
   document.getElementById('btnGPS').addEventListener('click', getLocation);
@@ -117,8 +138,8 @@
   function buildScale() {
     const wrap = document.getElementById('svgWrap');
     const cont = document.getElementById('container');
-    const size = Math.min(cont.clientWidth, cont.clientHeight) * 0.92;
-    if (!size) return;
+    const size = Math.min(cont.clientWidth, cont.clientHeight) * 0.9;
+    if (!size || size <= 0) return;
 
     const ns  = 'http://www.w3.org/2000/svg';
     const cx  = size / 2;
@@ -127,18 +148,14 @@
     const Ro  = R * 0.82;          
     const Ri  = R * 0.45; 
 
-    const N   = 5;
-    const startAngle = -Math.PI / 2;
-
     const svg = document.createElementNS(ns, 'svg' );
-    // ID adicionado para captura
     svg.setAttribute('id', 'ringelmannSVG');
-    svg.setAttribute('width',   size);
-    svg.setAttribute('height',  size);
+    svg.setAttribute('width', size);
+    svg.setAttribute('height', size);
     svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
-    svg.style.background = 'transparent';
 
     const toXY = (r, a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+    const startAngle = -Math.PI / 2;
 
     const outerRing = document.createElementNS(ns, 'path');
     const dOuter = `M ${cx} ${cy-R} A ${R} ${R} 0 1 1 ${cx} ${cy+R} A ${R} ${R} 0 1 1 ${cx} ${cy-R} Z ` +
@@ -146,18 +163,17 @@
     outerRing.setAttribute('d', dOuter);
     outerRing.setAttribute('fill', '#ffffff');
     outerRing.setAttribute('stroke', '#000000');
-    outerRing.setAttribute('stroke-width', 1.5);
     svg.appendChild(outerRing);
 
     const segs = [
-      { color: '#d8d8d8', label: 'Nº1', dens: '20%'  }, 
-      { color: '#aaaaaa', label: 'Nº2', dens: '40%'  }, 
-      { color: '#787878', label: 'Nº3', dens: '60%'  }, 
-      { color: '#484848', label: 'Nº4', dens: '80%'  }, 
-      { color: '#000000', label: 'Nº5', dens: '100%' }  
+      { color: '#d8d8d8', label: '1', dens: '20%'  }, 
+      { color: '#aaaaaa', label: '2', dens: '40%'  }, 
+      { color: '#787878', label: '3', dens: '60%'  }, 
+      { color: '#484848', label: '4', dens: '80%'  }, 
+      { color: '#000000', label: '5', dens: '100%' }  
     ];
 
-    const step = (2 * Math.PI) / N;
+    const step = (2 * Math.PI) / 5;
     segs.forEach((seg, i) => {
       const a0 = startAngle + i * step;
       const a1 = startAngle + (i + 1) * step;
@@ -166,109 +182,73 @@
       const [ix1, iy1] = toXY(Ri, a1);
       const [ix0, iy0] = toXY(Ri, a0);
 
-      const d = `M ${ox0} ${oy0} A ${Ro} ${Ro} 0 0 1 ${ox1} ${oy1} L ${ix1} ${iy1} L ${ix0} ${iy0} Z`;
+      const d = `M ${ox0} ${oy0} A ${Ro} ${Ro} 0 0 1 ${ox1} ${oy1} L ${ix1} ${iy1} A ${Ri} ${Ri} 0 0 0 ${ix0} ${iy0} Z`;
       const path = document.createElementNS(ns, 'path');
       path.setAttribute('d', d);
       path.setAttribute('fill', seg.color);
       path.setAttribute('stroke', '#ffffff');
-      path.setAttribute('stroke-width', 1.2);
       svg.appendChild(path);
+
+      const text = document.createElementNS(ns, 'text');
+      const [tx, ty] = toXY((Ro + R) / 2, a0 + step / 2);
+      text.setAttribute('x', tx);
+      text.setAttribute('y', ty);
+      text.setAttribute('fill', '#000');
+      text.setAttribute('font-size', size * 0.04);
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('dominant-baseline', 'central');
+      text.setAttribute('font-weight', 'bold');
+      text.textContent = seg.label;
+      svg.appendChild(text);
     });
-
-    const rText = (Ro + R) / 2;
-    segs.forEach((seg, i) => {
-      const a0 = startAngle + i * step;
-      const a1 = startAngle + (i + 1) * step;
-      const pathId = `textArc${i}`;
-      const arcPath = document.createElementNS(ns, 'path');
-      const [sx, sy] = toXY(rText, a0 + 0.08);
-      const [ex, ey] = toXY(rText, a1 - 0.08);
-      arcPath.setAttribute('id', pathId);
-      arcPath.setAttribute('d', `M ${sx} ${sy} A ${rText} ${rText} 0 0 1 ${ex} ${ey}`);
-      arcPath.setAttribute('fill', 'none');
-      svg.appendChild(arcPath);
-
-      const textEl = document.createElementNS(ns, 'text');
-      textEl.setAttribute('font-size', size * 0.032);
-      textEl.setAttribute('font-family', 'Arial, sans-serif');
-      textEl.setAttribute('font-weight', 'bold');
-      textEl.setAttribute('fill', '#000000');
-      
-      const tp = document.createElementNS(ns, 'textPath');
-      tp.setAttribute('href', `#${pathId}`);
-      tp.setAttribute('startOffset', '50%');
-      tp.setAttribute('text-anchor', 'middle');
-      tp.textContent = `${seg.label} DENS. ${seg.dens}`;
-      
-      textEl.appendChild(tp);
-      svg.appendChild(textEl);
-    });
-
-    for (let i = 0; i < N; i++) {
-      const a = startAngle + i * step;
-      const [x1, y1] = toXY(Ro, a); const [x2, y2] = toXY(R, a);
-      const sep = document.createElementNS(ns, 'line');
-      sep.setAttribute('x1', x1); sep.setAttribute('y1', y1);
-      sep.setAttribute('x2', x2); sep.setAttribute('y2', y2);
-      sep.setAttribute('stroke', '#000000'); sep.setAttribute('stroke-width', 1.5);
-      svg.appendChild(sep);
-    }
 
     wrap.innerHTML = '';
     wrap.appendChild(svg);
   }
 
-  // NOVA FUNÇÃO DE CAPTURA
   function capturePhoto() {
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvasCapture');
     const ctx = canvas.getContext('2d');
     const svg = document.getElementById('ringelmannSVG');
+    const status = document.getElementById('status');
     
-    // 1. Ajusta o canvas para a resolução real do vídeo
+    status.textContent = 'Processando foto...';
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    
-    // 2. Desenha o frame do vídeo no canvas
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     
-    // 3. Serializa o SVG da sua escala para imagem
     const svgData = new XMLSerializer().serializeToString(svg);
     const svgBlob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
     const url = URL.createObjectURL(svgBlob);
     const img = new Image();
 
     img.onload = function() {
-      // Desenha o seu SVG centralizado sobre a foto
       const size = Math.min(canvas.width, canvas.height) * 0.9;
-      const x = (canvas.width - size) / 2;
-      const y = (canvas.height - size) / 2;
-      ctx.drawImage(img, x, y, size, size);
+      ctx.drawImage(img, (canvas.width - size) / 2, (canvas.height - size) / 2, size, size);
       
-      // 4. Adiciona texto com data e GPS na foto
+      ctx.fillStyle = "rgba(0,0,0,0.7)";
+      ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
       ctx.fillStyle = "white";
-      ctx.strokeStyle = "black";
-      ctx.lineWidth = 3;
-      ctx.font = "20px Arial";
+      ctx.font = "16px Arial";
       const info = `${document.getElementById('datetime').textContent} | LAT: ${document.getElementById('lat').textContent} LON: ${document.getElementById('lon').textContent}`;
-      ctx.strokeText(info, 20, canvas.height - 30);
-      ctx.fillText(info, 20, canvas.height - 30);
+      ctx.fillText(info, 10, canvas.height - 15);
 
-      // 5. Gera o download
       const link = document.createElement('a');
       link.download = `Ringelmann_${Date.now()}.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
       URL.revokeObjectURL(url);
+      status.textContent = 'Foto salva!';
     };
     img.src = url;
   }
-  document.getElementById('btnCapture').addEventListener('click', capturePhoto);
 
-  window.addEventListener('resize', buildScale);
+  document.getElementById('btnCapture').addEventListener('click', capturePhoto);
+  window.addEventListener('resize', () => { setTimeout(buildScale, 100); });
+  
   startCamera();
   getLocation();
-  setTimeout(buildScale, 100);
 </script>
 </body>
 </html>
