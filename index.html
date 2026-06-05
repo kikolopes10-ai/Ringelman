@@ -112,13 +112,12 @@
         document.getElementById('lon').textContent = pos.coords.longitude.toFixed(6);
         status.textContent = 'Localização atualizada.';
       },
-      err => { status.textContent = 'Erro GPS: ' + err.message; },
+      err => { status.textContent = 'Erro GPS: Verifique permissões.'; },
       { enableHighAccuracy: true }
     );
   }
   document.getElementById('btnGPS').addEventListener('click', getLocation);
 
-  // SUA ESCALA ORIGINAL VOLTOU AQUI
   function buildScale() {
     const wrap = document.getElementById('svgWrap');
     const cont = document.getElementById('container');
@@ -221,12 +220,15 @@
     wrap.appendChild(svg);
   }
 
+  // FUNÇÃO DE CAPTURA ESTILO TIMESTAMP
   function capturePhoto() {
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvasCapture');
     const ctx = canvas.getContext('2d');
     const svg = document.getElementById('ringelmannSVG');
+    const status = document.getElementById('status');
     
+    // Resolução da foto igual ao vídeo
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -237,29 +239,52 @@
     const img = new Image();
 
     img.onload = function() {
+      // Desenha a escala no centro
       const size = Math.min(canvas.width, canvas.height) * 0.9;
-      const x = (canvas.width - size) / 2;
-      const y = (canvas.height - size) / 2;
-      ctx.drawImage(img, x, y, size, size);
+      ctx.drawImage(img, (canvas.width - size) / 2, (canvas.height - size) / 2, size, size);
       
-      ctx.fillStyle = "white";
-      ctx.strokeStyle = "black";
-      ctx.lineWidth = 3;
-      ctx.font = "20px Arial";
-      const info = `${document.getElementById('datetime').textContent} | LAT: ${document.getElementById('lat').textContent} LON: ${document.getElementById('lon').textContent}`;
-      ctx.strokeText(info, 20, canvas.height - 30);
-      ctx.fillText(info, 20, canvas.height - 30);
+      // FORMATAÇÃO DO TIMESTAMP
+      const now = new Date();
+      const p = n => String(n).padStart(2,'0');
+      const dateStr = `${p(now.getDate())}/${p(now.getMonth()+1)}/${now.getFullYear()} ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;
+      
+      // Formata Latitude e Longitude (ex: -29,9825S -52,3656W)
+      const latVal = parseFloat(document.getElementById('lat').textContent);
+      const lonVal = parseFloat(document.getElementById('lon').textContent);
+      const latFormatted = isNaN(latVal) ? "--" : latVal.toFixed(6).replace('.',',') + (latVal < 0 ? "S" : "N");
+      const lonFormatted = isNaN(lonVal) ? "--" : lonVal.toFixed(6).replace('.',',') + (lonVal < 0 ? "W" : "E");
+      const gpsStr = `${latFormatted} ${lonFormatted}`;
 
+      // Configuração visual do texto
+      const margin = 20;
+      const fontSize = Math.max(canvas.width * 0.025, 18);
+      ctx.font = `bold ${fontSize}px Arial`;
+      ctx.textAlign = "right";
+      ctx.textBaseline = "bottom";
+      
+      // Desenha contorno preto para ler em qualquer fundo
+      ctx.strokeStyle = "black";
+      ctx.lineWidth = 4;
+      ctx.strokeText(dateStr, canvas.width - margin, canvas.height - margin - fontSize - 5);
+      ctx.strokeText(gpsStr, canvas.width - margin, canvas.height - margin);
+
+      // Desenha texto branco por cima
+      ctx.fillStyle = "white";
+      ctx.fillText(dateStr, canvas.width - margin, canvas.height - margin - fontSize - 5);
+      ctx.fillText(gpsStr, canvas.width - margin, canvas.height - margin);
+
+      // Download
       const link = document.createElement('a');
-      link.download = `Ringelmann_Captura.png`;
+      link.download = `Ringelmann_${Date.now()}.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
       URL.revokeObjectURL(url);
+      status.textContent = 'Foto salva!';
     };
     img.src = url;
   }
-  document.getElementById('btnCapture').addEventListener('click', capturePhoto);
 
+  document.getElementById('btnCapture').addEventListener('click', capturePhoto);
   window.addEventListener('resize', buildScale);
   startCamera();
   getLocation();
