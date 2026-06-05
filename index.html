@@ -6,70 +6,74 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
+    
+    html, body {
+      height: 100%;
       background: #000;
+    }
+
+    body {
       color: #fff;
       font-family: Arial, sans-serif;
       display: flex;
       flex-direction: column;
-      /* Ajuste para não cortar no celular */
-      height: 100vh; 
-      height: 100dvh; 
       overflow: hidden;
     }
+
     #container {
       position: relative;
-      flex: 1; /* Ocupa o máximo de espaço possível */
+      flex: 1; /* Ocupa o topo */
       overflow: hidden;
-      background: #111;
     }
+
     video {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
       object-fit: cover;
+      z-index: 1;
     }
+
     #svgWrap {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
       pointer-events: none;
-      z-index: 10;
+      z-index: 5; /* Fica acima do vídeo */
     }
+
     #infoPanel {
-      padding: 10px 12px;
+      position: relative;
+      z-index: 10; /* Fica acima de tudo */
+      padding: 10px;
       background: rgba(0,0,0,0.9);
-      border-top: 1px solid #333;
-      flex-shrink: 0; /* Impede que o painel seja esmagado */
-      z-index: 20;
+      border-top: 1px solid #444;
+      min-height: 110px; /* Garante espaço para os botões */
     }
-    .grid-info {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      font-size: 12px;
-      gap: 4px;
-      margin-bottom: 8px;
+
+    .btns { 
+      display: flex; 
+      gap: 10px; 
+      margin-top: 8px; 
     }
-    .btns {
-      display: flex;
-      gap: 8px;
-    }
+
     button {
       flex: 1;
-      padding: 12px 5px;
-      font-size: 13px;
+      padding: 12px;
+      font-size: 14px;
       border: none;
-      border-radius: 6px;
+      border-radius: 4px;
       cursor: pointer;
       color: #fff;
       font-weight: bold;
-      text-transform: uppercase;
     }
+
     #btnGPS { background: #1e88e5; }
     #btnCapture { background: #2e7d32; }
-    #status { font-size: 11px; color: #aaa; margin-top: 6px; text-align: center; }
+    
+    #status { font-size: 11px; color: #aaa; margin-top: 5px; }
     canvas { display: none; }
   </style>
 </head>
@@ -81,16 +85,12 @@
 </div>
 
 <div id="infoPanel">
-  <div class="grid-info">
-    <div><strong>Data:</strong> <span id="datetime">--/--/--</span></div>
-    <div style="text-align: right;"><strong>Lat:</strong> <span id="lat">--</span></div>
-    <div><strong>Ringelmann v1.0</strong></div>
-    <div style="text-align: right;"><strong>Lon:</strong> <span id="lon">--</span></div>
-  </div>
+  <div style="font-size: 13px;"><strong>Data:</strong> <span id="datetime">--/--/---- --:--</span></div>
+  <div style="font-size: 13px;"><strong>Lat:</strong> <span id="lat">--</span> | <strong>Lon:</strong> <span id="lon">--</span></div>
   
   <div class="btns">
     <button id="btnGPS">GPS</button>
-    <button id="btnCapture">Capturar Foto</button>
+    <button id="btnCapture">CAPTURAR</button>
   </div>
   <div id="status">Iniciando...</div>
 </div>
@@ -98,36 +98,39 @@
 <canvas id="canvasCapture"></canvas>
 
 <script>
+  // 1. Atualizar Data
   function updateDateTime() {
     const now = new Date();
     const p = n => String(n).padStart(2,'0');
     document.getElementById('datetime').textContent =
-      `${p(now.getDate())}/${p(now.getMonth()+1)} ${p(now.getHours())}:${p(now.getMinutes())}`;
+      `${p(now.getDate())}/${p(now.getMonth()+1)}/${now.getFullYear()} ${p(now.getHours())}:${p(now.getMinutes())}`;
   }
   setInterval(updateDateTime, 1000);
   updateDateTime();
 
+  // 2. Iniciar Câmera
   async function startCamera() {
     const status = document.getElementById('status');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } }, audio: false
+        video: { facingMode: 'environment' }, audio: false
       });
       document.getElementById('video').srcObject = stream;
-      status.textContent = 'Câmera ativa.';
+      status.textContent = 'Câmera OK.';
       setTimeout(buildScale, 500);
     } catch(e) {
-      status.textContent = 'Erro câmera: ' + e.message;
+      status.textContent = 'Erro Câmera: ' + e.message;
     }
   }
 
+  // 3. Localização
   function getLocation() {
     const status = document.getElementById('status');
     navigator.geolocation.getCurrentPosition(
       pos => {
-        document.getElementById('lat').textContent = pos.coords.latitude.toFixed(4);
-        document.getElementById('lon').textContent = pos.coords.longitude.toFixed(4);
-        status.textContent = 'Localização OK.';
+        document.getElementById('lat').textContent = pos.coords.latitude.toFixed(5);
+        document.getElementById('lon').textContent = pos.coords.longitude.toFixed(5);
+        status.textContent = 'GPS OK.';
       },
       err => { status.textContent = 'Erro GPS: Ative a localização.'; },
       { enableHighAccuracy: true }
@@ -135,11 +138,12 @@
   }
   document.getElementById('btnGPS').addEventListener('click', getLocation);
 
+  // 4. Desenhar Escala (Seu SVG original)
   function buildScale() {
     const wrap = document.getElementById('svgWrap');
     const cont = document.getElementById('container');
     const size = Math.min(cont.clientWidth, cont.clientHeight) * 0.9;
-    if (!size || size <= 0) return;
+    if (!size) return;
 
     const ns  = 'http://www.w3.org/2000/svg';
     const cx  = size / 2;
@@ -157,47 +161,35 @@
     const toXY = (r, a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)];
     const startAngle = -Math.PI / 2;
 
+    // Disco branco externo
     const outerRing = document.createElementNS(ns, 'path');
-    const dOuter = `M ${cx} ${cy-R} A ${R} ${R} 0 1 1 ${cx} ${cy+R} A ${R} ${R} 0 1 1 ${cx} ${cy-R} Z ` +
-                   `M ${cx} ${cy-Ro} A ${Ro} ${Ro} 0 1 0 ${cx} ${cy+Ro} A ${Ro} ${Ro} 0 1 0 ${cx} ${cy-Ro} Z`;
-    outerRing.setAttribute('d', dOuter);
-    outerRing.setAttribute('fill', '#ffffff');
-    outerRing.setAttribute('stroke', '#000000');
+    outerRing.setAttribute('d', `M ${cx} ${cy-R} A ${R} ${R} 0 1 1 ${cx} ${cy+R} A ${R} ${R} 0 1 1 ${cx} ${cy-R} Z M ${cx} ${cy-Ro} A ${Ro} ${Ro} 0 1 0 ${cx} ${cy+Ro} A ${Ro} ${Ro} 0 1 0 ${cx} ${cy-Ro} Z`);
+    outerRing.setAttribute('fill', '#fff');
+    outerRing.setAttribute('stroke', '#000');
     svg.appendChild(outerRing);
 
     const segs = [
-      { color: '#d8d8d8', label: '1', dens: '20%'  }, 
-      { color: '#aaaaaa', label: '2', dens: '40%'  }, 
-      { color: '#787878', label: '3', dens: '60%'  }, 
-      { color: '#484848', label: '4', dens: '80%'  }, 
-      { color: '#000000', label: '5', dens: '100%' }  
+      { color: '#d8d8d8', label: '1' }, { color: '#aaaaaa', label: '2' }, 
+      { color: '#787878', label: '3' }, { color: '#484848', label: '4' }, 
+      { color: '#000000', label: '5' }
     ];
 
     const step = (2 * Math.PI) / 5;
     segs.forEach((seg, i) => {
       const a0 = startAngle + i * step;
       const a1 = startAngle + (i + 1) * step;
-      const [ox0, oy0] = toXY(Ro, a0);
-      const [ox1, oy1] = toXY(Ro, a1);
-      const [ix1, iy1] = toXY(Ri, a1);
-      const [ix0, iy0] = toXY(Ri, a0);
-
-      const d = `M ${ox0} ${oy0} A ${Ro} ${Ro} 0 0 1 ${ox1} ${oy1} L ${ix1} ${iy1} A ${Ri} ${Ri} 0 0 0 ${ix0} ${iy0} Z`;
+      const d = `M ${toXY(Ro, a0)[0]} ${toXY(Ro, a0)[1]} A ${Ro} ${Ro} 0 0 1 ${toXY(Ro, a1)[0]} ${toXY(Ro, a1)[1]} L ${toXY(Ri, a1)[0]} ${toXY(Ri, a1)[1]} A ${Ri} ${Ri} 0 0 0 ${toXY(Ri, a0)[0]} ${toXY(Ri, a0)[1]} Z`;
       const path = document.createElementNS(ns, 'path');
       path.setAttribute('d', d);
       path.setAttribute('fill', seg.color);
-      path.setAttribute('stroke', '#ffffff');
+      path.setAttribute('stroke', '#fff');
       svg.appendChild(path);
 
       const text = document.createElementNS(ns, 'text');
       const [tx, ty] = toXY((Ro + R) / 2, a0 + step / 2);
-      text.setAttribute('x', tx);
-      text.setAttribute('y', ty);
-      text.setAttribute('fill', '#000');
-      text.setAttribute('font-size', size * 0.04);
-      text.setAttribute('text-anchor', 'middle');
-      text.setAttribute('dominant-baseline', 'central');
-      text.setAttribute('font-weight', 'bold');
+      text.setAttribute('x', tx); text.setAttribute('y', ty);
+      text.setAttribute('text-anchor', 'middle'); text.setAttribute('dominant-baseline', 'central');
+      text.setAttribute('fill', '#000'); text.setAttribute('font-weight', 'bold');
       text.textContent = seg.label;
       svg.appendChild(text);
     });
@@ -206,37 +198,37 @@
     wrap.appendChild(svg);
   }
 
+  // 5. Captura de Foto
   function capturePhoto() {
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvasCapture');
     const ctx = canvas.getContext('2d');
     const svg = document.getElementById('ringelmannSVG');
     const status = document.getElementById('status');
-    
-    status.textContent = 'Processando foto...';
+
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
+    ctx.drawImage(video, 0, 0);
+
     const svgData = new XMLSerializer().serializeToString(svg);
+    const img = new Image();
     const svgBlob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
     const url = URL.createObjectURL(svgBlob);
-    const img = new Image();
 
     img.onload = function() {
-      const size = Math.min(canvas.width, canvas.height) * 0.9;
-      ctx.drawImage(img, (canvas.width - size) / 2, (canvas.height - size) / 2, size, size);
+      const s = Math.min(canvas.width, canvas.height) * 0.9;
+      ctx.drawImage(img, (canvas.width-s)/2, (canvas.height-s)/2, s, s);
       
-      ctx.fillStyle = "rgba(0,0,0,0.7)";
-      ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
+      ctx.fillStyle = "rgba(0,0,0,0.8)";
+      ctx.fillRect(0, canvas.height - 60, canvas.width, 60);
       ctx.fillStyle = "white";
-      ctx.font = "16px Arial";
-      const info = `${document.getElementById('datetime').textContent} | LAT: ${document.getElementById('lat').textContent} LON: ${document.getElementById('lon').textContent}`;
-      ctx.fillText(info, 10, canvas.height - 15);
+      ctx.font = "20px Arial";
+      const info = document.getElementById('datetime').textContent + " | LAT: " + document.getElementById('lat').textContent + " LON: " + document.getElementById('lon').textContent;
+      ctx.fillText(info, 20, canvas.height - 25);
 
       const link = document.createElement('a');
-      link.download = `Ringelmann_${Date.now()}.png`;
-      link.href = canvas.toDataURL("image/png");
+      link.download = 'Ringelmann_Captura.png';
+      link.href = canvas.toDataURL();
       link.click();
       URL.revokeObjectURL(url);
       status.textContent = 'Foto salva!';
@@ -245,7 +237,7 @@
   }
 
   document.getElementById('btnCapture').addEventListener('click', capturePhoto);
-  window.addEventListener('resize', () => { setTimeout(buildScale, 100); });
+  window.addEventListener('resize', buildScale);
   
   startCamera();
   getLocation();
